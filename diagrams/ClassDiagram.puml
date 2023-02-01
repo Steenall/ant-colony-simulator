@@ -1,0 +1,326 @@
+@startuml
+'https://plantuml.com/class-diagram
+
+
+class GameEngine {
+    -colony : Colony *
+    -game : Game *
+    -defaultFPS : unsigned const
+    +GameEngine(game : Game *)
+    +start() : void
+    +pause() : void
+}
+
+package model {
+    class Coordinate {
+        +x: unsigned
+        +y: unsigned
+        +Coordinate(x: unsigned, y: unsigned)
+        +Coordinate()
+        +operator == (const Coordinate& c) const : bool
+    }
+
+    enum Action {
+        NOTHING,
+        GO_BACK_TO_COLONY_WITH_FOOD,
+        COMING_HOME,
+        SEARCH_FOR_FOOD,
+        SEARCH_COLONY,
+        EXPLORE,
+        PATROLLING,
+        BORN,
+        CARRING_LARVA,
+        ATTACK,
+        DIE
+    }
+
+    enum Direction {
+        NONE,
+        TOP_RIGHT,
+        TOP,
+        TOP_LEFT,
+        LEFT,
+        BOTTOM_LEFT,
+        BOTTOM,
+        BOTTOM_RIGHT,
+        RIGHT
+    }
+
+    abstract class Ant {
+        #pathing : std::vector<Direction>
+        #countChunks : int
+        #coordinate : Coordinate
+        #homeCoordinate : Coordinate
+        #{static} idCount : unsigned long
+        #id : unsigned long
+        +Ant()
+        +{abstract} virtual update(map : Map) : Action
+        +getCoordinate() : Coordinate
+        +setCoordinate(coordinate : Coordinate) : void
+        +moveBackward(map : Map *) : void
+        +moveTo(map : Map *, direction : Direction) : void
+        +setHomeCoordinate(coordinate : Coordinate) : void
+        +operator==(other : const Ant&) const : bool
+        +isAtHome() : bool
+        +~Ant();
+    }
+
+    Ant --> Coordinate : <<coordinate>>
+    Ant --> Coordinate : <<homeCoordinate>>
+    Ant -left-* Direction : <<pathing>>
+    Ant -- Action
+
+    abstract class ColonyAnt extends Ant {
+        +ColonyAnt();
+        +{abstract} update(map : Map) :  Action;
+        +~ColonyAnt();
+    }
+
+    class Queen {
+        -currentAge : unsigned
+        -isAgressed : bool
+        -currentChild : ColonyAnt **
+        +Queen()
+        +canLayEggs() : bool
+        +agressed() : void
+        +update(map : Map) : Action
+        +born() : void
+        +{static} createLarva(coordinate : Coordinate) : ColonyAnt **
+        +~Queen()
+    }
+    Queen --|> ColonyAnt
+
+    Queen --o ColonyAnt : <<currentChild>>
+
+    class Worker {
+        -carringFood : bool
+        -dayBeforeMajority : unsigned
+        +Worker()
+        +setCarringFood(carringFood : bool) : void
+        +isCarringFood() : bool
+        +isMinor() : bool
+        +update(Map map) : Action
+        +~Worker()
+    }
+    Worker -up-|> ColonyAnt
+
+    class Soldier {
+        +dayBeforeComingBack : unsigned
+        +comingHome : bool
+        +Soldier()
+        +isComingHome() : bool
+        +update(map : Map) : Action
+        +~Soldier()
+    }
+    Soldier -left-|> ColonyAnt
+
+    class Slaver {
+        -isCarringLarva : bool
+        +Slaver()
+        +carringLarva() : bool
+        +update():Action
+        +~Slaver()
+    }
+    Slaver -up-|> ColonyAnt
+
+    class Scout {
+        -dayBeforeMajority : unsigned
+        +Scout()
+        +isMinor() : bool
+        +update(map : Map) : Action
+        +~Scout()
+    }
+    Scout -up-|> ColonyAnt
+
+    class Colony {
+        -listAnts : std::vector<Ant*>
+        -queen : Queen *
+        -foodStock : unsigned long
+        -days : unsigned
+        +Colony()
+        +update() : void
+        +addLarva(ColonyAnt ** larva) : void
+        +getAnts() : std::vector<Ant*>
+        +getDay() : unsigned
+        +getFoodQuantity() : unsigned long
+        +addFood(quantity : unsigned) : void
+        +~Colony()
+    }
+
+    Colony --* Ant : <<listAnts>>
+    Colony --> Queen : <<queen>>
+    GameEngine -left-> Colony : <<colony>>
+
+    enum TypeOfChunk {
+        EMPTY,
+        COLONY,
+        OBSTACLE
+    }
+
+    class Chunk {
+        -typeOfChunk : TypeOfChunk
+        -foodQuantity : unsigned
+        -explored : bool
+        -pheromoneQuantity : unsigned
+        -listAnt : std::vector<Ant*>
+        +Chunk(type : TypeOfChunk, foodQuantity : unsigned)
+        +setTypeOfChunk(type : TypeOfChunk)
+        +setFoodQuantity(quantity : unsigned)
+        +getTypeOfChunk() : TypeOfChunk
+        +getFoodQuantity() : unsigned
+        +getPheromone() : unsigned
+        +setPheromone(quantity : unsigned)
+        +isExplored() : bool
+        +setExplored(explored : bool)
+        +addAnt(ant : Ant*)
+        +removeAnt(ant : Ant*)
+        +getAnts() : std::vector<Ant*>
+        +setAnts(ants : std::vector<Ant*>)
+        +~Chuck()
+    }
+
+    Chunk o--* Ant : <<listAnt>>
+    Chunk -left-> TypeOfChunk : <<typeOfChunk>>
+
+    class Map {
+        -chunks : Chunk[][]
+        -width : unsigned
+        -height : unsigned
+        +Map(width:unsigned, height:unsigned)
+        +printMap() : void
+        +getChunk(x : unsigned, y : unsigned)
+        +getChunks() : Chunk[][]
+        +changeTypeOfChunk(x : unsigned, y : unsigned, type : TypeOfChunk)
+        +getHeigth() : unsigned
+        +getWidth() : unsigned
+        +operator[](x : unsigned) : Chunk *
+        +operator[](coordinate : Coordinate) : Chunk
+        +addAnt(x : unsigned, y : unsigned, ant : Ant *)
+        +removeAnt(x : unsigned, y : unsigned, ant : Ant *)
+        +setExplored(x : unsigned, y : unsigned, explored : bool)
+        +getFoodQuantity(x : unsigned, y : unsigned) :unsigned
+        +changeFoodQuantity (x : unsigned,y : unsigned, quantity : unsigned)
+        +~Map()
+    }
+
+    Map --* Chunk : <<chunks>>
+
+    class MapBuilder {
+        -width : unsigned
+        -height : unsigned
+        -std::list<Coordinate> freeChunks
+        -map : Map *
+        -obstacleCanCollide : bool
+        -mt : std::mt19937
+        -dist : std::uniform_int_distribution<unsigned>
+        -dist_x : std::uniform_int_distribution<unsigned>
+        -dist_y : std::uniform_int_distribution<unsigned>
+        +MapBuilder(width : unsigned, height : unsigned, borderCanCollide : bool)
+        +addObstacles(number : unsigned, size : unsigned)
+        +addFood(number : unsigned, quantity : unsigned)
+        +getMap() : Map *
+        +~MapBuilder()
+    }
+
+    MapBuilder --> Map : <<map>>
+
+    class Game {
+        -map : Map *
+        -colony : Colony *
+        -colonyEvolutionExporter : ColonyEvolutionExporter *
+        -isRunning : bool
+        +Game(map : Map *, colony : Colony *)
+        +getMap() : Map *
+        +updateAllAnts() : void
+        +getColony() : Colony *
+        +stopGame() : void
+        +start() : void
+        +updateAnt(map : Map *, ant : Ant *, action : Action, coordinate : Coordinate) : bool
+        + {static} getRandomDirection(map : Map, coordinate : Coordinate, needToBeExplored : bool, containFood : bool) : Direction
+    }
+
+    Game --> Map : <<map>>
+    Game --> Colony : <<colony>>
+    GameEngine --> Game : <<game>>
+}
+
+package export {
+
+    class ColonyEvolutionExporter {
+        -fileIn : ofstream
+        +ColonyEvolutionExporter(fileName : std::string)
+        +update(colony : Colony) : void
+        #ColonyEvolutionExporter()
+        -next() : void
+        -nextLine() : void
+        -append(string : std::string) : void
+        -append(integer : int) : void
+        -append(integer : unsigned) : void
+        -append(integer : unsigned long) : void
+        -append(integer : long) : void
+        -append(floatValue : float) : void
+        -append(doubleValue : double) : void
+    }
+    Game -left-> ColonyEvolutionExporter : <<colonyEvolutionExporter>>
+}
+
+
+package view {
+    package sfml {
+
+        class SFMLGameEngine {
+            -colonyTexture : sf::Texture
+            -foodTexture : sf::Texture
+            -antTexture : sf::Texture
+            -grassTexture : sf::Texture
+            -grassTextureNotVisited : sf::Texture
+            -rockTexture : sf::Texture
+            -workerTexture : sf::Texture
+            -slaveTexture : sf::Texture
+            -soldierTexture : sf::Texture
+            -scoutTexture : sf::Texture
+            -font : sf::Font
+            -popup : sf::Text
+            -thread : sf::Thread
+            -window : sf::RenderWindow *
+            -view : sf::View *
+            -control : SFMLEventHandler *
+            -game : Game *
+            -height : unsigned
+            -width : unsigned
+            +SFMLGameEngine(window : sf::RenderWindow *, game : Game *)
+            +createTexture() : void
+            +renderingFunction() : void
+            +start() : void
+            +stop() : void
+            +terminate() : void
+            +getWindow() : sf::RenderWindow *
+            +getView() : sf::View *
+            +setPopup(string : std::string, int x, int y) : void
+            +setSFMLEventHandler(control : SFMLEventHandler *) : void
+            -addAnts(renderTexture : sf::RenderTexture *) : void
+            -addPopup(pTexture : sf::RenderTexture *) : void
+        }
+
+        Game <-up- SFMLGameEngine : <<game>>
+
+        class SFMLEventHandler {
+            -window : sf::RenderWindow *
+            -game : Game *
+            -sfmlGameEngine : SFMLGameEngine *
+            -thread : sf::Thread *
+            +SFMLEventHandler(window : sf::RenderWindow *, game : Game *, sfmlGameEngine : SFMLGameEngine *)
+            +start() : void
+            +terminate() : void
+            +readInput() : void
+            +setView() : void
+            -handleEvent() : void
+            -buildPopup(int x, int y) : std::string
+            +~SFMLEventHandler()
+        }
+
+        SFMLGameEngine -left-> SFMLEventHandler : <<control>>
+        SFMLGameEngine <-- SFMLEventHandler : <<sfmlGameEngine>>
+    }
+}
+@enduml
